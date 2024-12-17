@@ -1,27 +1,24 @@
 package hashmap;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class MyHashMap2<K, V> implements Map<K, V> {
+public class ReetrantLockHashMap<K, V> implements Map<K, V> {
 
     private final HashMap<K, V> innerMap = new HashMap<>();
-    private final int lockNumber = 100;
-    private final ReentrantLock[] locks = new ReentrantLock[lockNumber];
+    private final int lockNumber = 16;
+    private final ReentrantLock[] segmentLock = new ReentrantLock[lockNumber];
 
-    public MyHashMap2() {
+    public ReetrantLockHashMap() {
         for (int i = 0; i < lockNumber; i++) {
-            locks[i] = new ReentrantLock();
+            segmentLock[i] = new ReentrantLock();
         }
     }
 
     private ReentrantLock getLockNumber(Object key) {
         int index = Math.abs(key.hashCode() % lockNumber);
-        return getReentrantLock(index);
-    }
-
-    private ReentrantLock getReentrantLock(int index) {
-        return locks[index];
+        return segmentLock[index];
     }
 
     @Override
@@ -71,14 +68,11 @@ public class MyHashMap2<K, V> implements Map<K, V> {
     @Override
     public int size() {
         int size = 0;
-        for (K key : innerMap.keySet()) {
-            ReentrantLock lock = getLockNumber(key);
-            lock.lock();
-            try {
-                size++;
-            } finally {
-                lock.unlock();
-            }
+        Arrays.stream(segmentLock).forEach(ReentrantLock::lock);
+        try {
+            size = innerMap.size();
+        } finally {
+            Arrays.stream(segmentLock).forEach(ReentrantLock::unlock);
         }
         return size;
     }
@@ -123,11 +117,5 @@ public class MyHashMap2<K, V> implements Map<K, V> {
     @Override
     public void putAll(Map<? extends K, ? extends V> m) {
         innerMap.putAll(m);
-    }
-
-    public static void main(String[] args) {
-        MyHashMap2<String, Integer> map = new MyHashMap2<>();
-        map.put("string", 1);
-        map.get("string");
     }
 }
